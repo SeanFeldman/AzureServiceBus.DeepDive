@@ -8,6 +8,7 @@ namespace Sending
         public static async Task Infrastructure(string connectionString, string destination)
         {
             var client = new ManagementClient(connectionString);
+            if (await client.QueueExistsAsync(destination))
             {
                 await client.DeleteQueueAsync(destination);
             }
