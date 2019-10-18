@@ -20,7 +20,7 @@
             await client.SendAsync(message);
             await client.CloseAsync();
 
-            Console.WriteLine("Sent message");
+            Console.WriteLine("Message sent to 'queue0''");
 
             var queue = "queue4";
             var receiver = new MessageReceiver(connectionString, queue);
@@ -30,8 +30,8 @@
 
             Console.WriteLine($"Got '{receivedMessage.Body.AsString()}' on queue '{queue}'");
             await receiver.CloseAsync();
-
-            Console.WriteLine("Setup forwarding from queue0 to queue5");
+            Console.ReadLine();
+            Console.WriteLine("Add forwarding from 'queue4' to 'queue5''");
 
             await Prepare.AddExtraHop(connectionString);
 
@@ -44,7 +44,7 @@
             receiver = new MessageReceiver(connectionString, queue);
             receivedMessage = await receiver.ReceiveAsync(TimeSpan.FromSeconds(5));
 
-            var what = receivedMessage == null ? "nothing" : $"'receivedMessage.Body.AsString()'"; 
+            var what = receivedMessage == null ? "nothing" : $"{receivedMessage.Body.AsString()}"; 
             Console.WriteLine($"Got {what} on queue '{queue}'");
 
             await receiver.CloseAsync();

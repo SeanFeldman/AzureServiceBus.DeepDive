@@ -16,14 +16,14 @@
         {
             await Prepare.Infrastructure(connectionString, destination);
 
-            Console.WriteLine("netstat -na | find \"5671\"");
+            Console.WriteLine("Using connection string");
 
             var sender = new MessageSender(connectionString, destination);
             await sender.SendAsync(new Message("Deep Dive".AsByteArray()));
             var receiver = new MessageReceiver(connectionString, destination);
             await receiver.ReceiveAsync();
 
-            Console.WriteLine("Continue with connection sharing");
+            Console.WriteLine("Using connection sharing");
             Console.ReadLine();
 
             await sender.CloseAsync();
