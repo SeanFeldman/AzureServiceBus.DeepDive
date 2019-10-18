@@ -28,7 +28,7 @@
 
                 await client.SendAsync(message);
 
-                Console.WriteLine("Message Send");
+                Console.WriteLine("Message sent");
             }
             finally
             {
