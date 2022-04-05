@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29409.12
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32328.378
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sending", "Sending\Sending.csproj", "{706CF99B-4682-4E5A-9884-84B3B2318FD5}"
 EndProject
@@ -21,7 +21,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MessageBatching", "MessageB
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "AtomicSends", "AtomicSends\AtomicSends.csproj", "{6BC3222D-169C-455E-880C-2C2E8CE1D4D0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SendVia", "SendVia\SendVia.csproj", "{6521E347-381B-4579-ACBF-67C160F17C9D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CrossEntityTransaction", "SendVia\CrossEntityTransaction.csproj", "{6521E347-381B-4579-ACBF-67C160F17C9D}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TransferDLQ", "TransferDLQ\TransferDLQ.csproj", "{C28AA524-739F-49C1-B572-9ADB6A0F660D}"
 EndProject
@@ -34,6 +34,15 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Plugins", "Plugins\Plugins.csproj", "{F0B8C4DD-B0DB-462B-98C6-D2960FB8BBDE}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Receiving", "Receiving\Receiving.csproj", "{D5E4B0C0-65A2-4DB3-9C13-3AA7F30B6BF6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{5DC072F9-4AAD-4887-B8F6-350660854409}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SafeBatching", "SafeBatching\SafeBatching.csproj", "{FACA55A4-95F6-47E3-B886-97E76A30185E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BindaryData", "BindaryData\BindaryData.csproj", "{B043EA13-95D1-4D0A-9514-26926221E814}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -105,6 +114,14 @@ Global
 		{D5E4B0C0-65A2-4DB3-9C13-3AA7F30B6BF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5E4B0C0-65A2-4DB3-9C13-3AA7F30B6BF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5E4B0C0-65A2-4DB3-9C13-3AA7F30B6BF6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FACA55A4-95F6-47E3-B886-97E76A30185E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FACA55A4-95F6-47E3-B886-97E76A30185E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FACA55A4-95F6-47E3-B886-97E76A30185E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FACA55A4-95F6-47E3-B886-97E76A30185E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B043EA13-95D1-4D0A-9514-26926221E814}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B043EA13-95D1-4D0A-9514-26926221E814}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B043EA13-95D1-4D0A-9514-26926221E814}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B043EA13-95D1-4D0A-9514-26926221E814}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

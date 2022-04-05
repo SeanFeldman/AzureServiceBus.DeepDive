@@ -1,78 +1,76 @@
-﻿namespace MessageSessions
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace MessageSessions;
+
+internal class Program
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString =
-            Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static TaskCompletionSource<bool> syncEvent =
-            new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        private static async Task Main(string[] args)
+        try
         {
-            await Prepare.Infrastructure(connectionString, destination);
-
-            var client = new QueueClient(connectionString, destination);
-            try
+            var messages = new List<ServiceBusMessage>
             {
-                var messages = new List<Message>
-                {
-                    new Message("Orange 1".AsByteArray()) {SessionId = "Orange"},
-                    new Message("Green 1".AsByteArray()) {SessionId = "Green"},
-                    new Message("Blue 1".AsByteArray()) {SessionId = "Blue"},
-                    new Message("Green 2".AsByteArray()) {SessionId = "Green"},
-                    new Message("Orange 2".AsByteArray()) {SessionId = "Orange"},
-                    new Message("Blue 2".AsByteArray()) {SessionId = "Blue"},
-                    new Message("Green 3".AsByteArray()) {SessionId = "Green"},
-                    new Message("Orange 3".AsByteArray()) {SessionId = "Orange"},
-                    new Message("Green 4".AsByteArray()) {SessionId = "Green"},
-                    new Message("Purple 1".AsByteArray()) {SessionId = "Purple"},
-                    new Message("Blue 3".AsByteArray()) {SessionId = "Blue"},
-                    new Message("Orange 4".AsByteArray()) {SessionId = "Orange"}
-                };
+                new("Orange 1") {SessionId = "Orange"},
+                new("Green 1") {SessionId = "Green"},
+                new("Blue 1") {SessionId = "Blue"},
+                new("Green 2") {SessionId = "Green"},
+                new("Orange 2") {SessionId = "Orange"},
+                new("Blue 2") {SessionId = "Blue"},
+                new("Green 3") {SessionId = "Green"},
+                new("Orange 3") {SessionId = "Orange"},
+                new("Green 4") {SessionId = "Green"},
+                new("Purple 1") {SessionId = "Purple"},
+                new("Blue 3") {SessionId = "Blue"},
+                new("Orange 4") {SessionId = "Orange"}
+            };
 
-                await client.SendAsync(messages);
+            var sender = serviceBusClient.CreateSender(destination);
+            await sender.SendMessagesAsync(messages);
+            await sender.DisposeAsync();
 
-                
-                Console.WriteLine("Messages sent");
+            Console.WriteLine("Messages sent");
 
-                client.RegisterSessionHandler(
-                    (session, message, token) =>
-                    {
-                        Console.WriteLine(
-                            $"Received message for session '{session.SessionId}' ID:'{message.MessageId}' and content:'{message.Body.AsString()}'");
-                        return Task.CompletedTask;
-                    },
-                    new SessionHandlerOptions(
-                        exception =>
-                        {
-                            Console.WriteLine($"Exception: {exception.Exception}");
-                            Console.WriteLine($"Action: {exception.ExceptionReceivedContext.Action}");
-                            Console.WriteLine($"ClientId: {exception.ExceptionReceivedContext.ClientId}");
-                            Console.WriteLine($"Endpoint: {exception.ExceptionReceivedContext.Endpoint}");
-                            Console.WriteLine($"EntityPath: {exception.ExceptionReceivedContext.EntityPath}");
-                            return Task.CompletedTask;
-                        })
-                    {
-                        MaxConcurrentSessions = 1,
-                        MessageWaitTimeout = TimeSpan.FromSeconds(2)
-                    }
-                );
-
-                Console.ReadLine();
-            }
-            finally
+            var options = new ServiceBusSessionProcessorOptions
             {
-                await client.CloseAsync();
-            }
+                MaxConcurrentSessions = 1,
+                SessionIdleTimeout = TimeSpan.FromSeconds(2),
+                //MaxConcurrentCallsPerSession = 10
+            };
+            var sessionProcessor = serviceBusClient.CreateSessionProcessor(destination, options);
+
+            sessionProcessor.ProcessMessageAsync += args =>
+            {
+                Console.WriteLine($"Received message for session '{args.SessionId}' ID:'{args.Message.MessageId}' and content:'{args.Message.Body}'");
+                return Task.CompletedTask;
+            };
+
+            sessionProcessor.ProcessErrorAsync += args =>
+            {
+                Console.WriteLine($"EntityPath: {args.EntityPath}");
+                Console.WriteLine($"FullyQualifiedNamespace: {args.FullyQualifiedNamespace}");
+                Console.WriteLine($"ErrorSource: {args.ErrorSource}");
+                Console.WriteLine($"Exception: {args.Exception}");
+                return Task.CompletedTask;
+            };
+
+            await sessionProcessor.StartProcessingAsync();
+
+            Console.ReadLine();
+        }
+        finally
+        {
+            await serviceBusClient.DisposeAsync();
         }
     }
 }

@@ -1,71 +1,66 @@
 using System.Threading.Tasks;
-using Microsoft.Azure.ServiceBus;
-using Microsoft.Azure.ServiceBus.Management;
+using Azure.Messaging.ServiceBus.Administration;
 
-namespace Topologies
+namespace Topologies;
+public static class Prepare
 {
-    public static class Prepare
+    public static async Task Infrastructure(string connectionString, string inputQueue, string topicName, string serviceASubscription, string serviceBSubscription)
     {
-        public static async Task Infrastructure(string connectionString, string inputQueue, string topicName, string serviceASubscription, string serviceBSubscription)
+        var client = await Cleanup(connectionString, inputQueue, topicName);
+
+        var subscriptionOptions = new CreateSubscriptionOptions(topicName, serviceASubscription)
         {
-            var client = await Cleanup(connectionString, inputQueue, topicName);
+            ForwardTo = inputQueue
+        };
+        await client.CreateSubscriptionAsync(subscriptionOptions);
 
-            var subscriptionDescription = new SubscriptionDescription(topicName, serviceASubscription)
+        subscriptionOptions = new CreateSubscriptionOptions(topicName, serviceBSubscription)
+        {
+            ForwardTo = inputQueue
+        };
+        await client.CreateSubscriptionAsync(subscriptionOptions);
+
+        await client.DeleteRuleAsync(topicName, serviceASubscription, "$Default");
+        await client.DeleteRuleAsync(topicName, serviceBSubscription, "$Default");
+
+        var ruleOptions = new CreateRuleOptions
+        {
+            Name = "MessagesFromServiceA",
+            Filter = new CorrelationRuleFilter
             {
-                ForwardTo = inputQueue
-            };
-            await client.CreateSubscriptionAsync(subscriptionDescription);
-            
-            subscriptionDescription = new SubscriptionDescription(topicName, serviceBSubscription)
-            {
-                ForwardTo = inputQueue
-            };
-            await client.CreateSubscriptionAsync(subscriptionDescription);
+                Subject = "rush"
+            }
+        };
+        await client.CreateRuleAsync(topicName, serviceASubscription, ruleOptions);
 
-            await client.DeleteRuleAsync(topicName, serviceASubscription, RuleDescription.DefaultRuleName);
-            await client.DeleteRuleAsync(topicName, serviceBSubscription, RuleDescription.DefaultRuleName);
+        ruleOptions = new CreateRuleOptions
+        {
+            Name = "MessagesFromServiceB",
+            Filter = new SqlRuleFilter("user.priority in ('high', 'normal', 'low')"),
+            Action = new SqlRuleAction("SET sys.Label = user.priority")
+        };
+        await client.CreateRuleAsync(topicName, serviceBSubscription, ruleOptions);
+    }
 
-            var ruleDescription = new RuleDescription
-            {
-                Name = "MessagesFromServiceA",
-                Filter = new CorrelationFilter
-                {
-                    Label = "rush"
-                }
-            };
-            await client.CreateRuleAsync(topicName, serviceASubscription, ruleDescription);
+    private static async Task<ServiceBusAdministrationClient> Cleanup(string connectionString, string inputQueue, string topicName)
+    {
+        var client = new ServiceBusAdministrationClient(connectionString);
 
-            ruleDescription = new RuleDescription
-            {
-                Name = "MessagesFromServiceB",
-                Filter = new SqlFilter("user.priority in ('high', 'normal', 'low')"),
-                Action = new SqlRuleAction("SET sys.Label = user.priority")
-            };
-            await client.CreateRuleAsync(topicName, serviceBSubscription, ruleDescription);
-
-            await client.CloseAsync();
+        if (await client.TopicExistsAsync(topicName))
+        {
+            await client.DeleteTopicAsync(topicName);
         }
 
-        private static async Task<ManagementClient> Cleanup(string connectionString, string inputQueue, string topicName)
+        var topicOptions = new CreateTopicOptions(topicName);
+        await client.CreateTopicAsync(topicOptions);
+
+        if (await client.QueueExistsAsync(inputQueue))
         {
-            var client = new ManagementClient(connectionString);
-
-            if (await client.TopicExistsAsync(topicName))
-            {
-                await client.DeleteTopicAsync(topicName);
-            }
-
-            var topicDescription = new TopicDescription(topicName);
-            await client.CreateTopicAsync(topicDescription);
-
-            if (await client.QueueExistsAsync(inputQueue))
-            {
-                await client.DeleteQueueAsync(inputQueue);
-            }
-
-            var queueDescription = new QueueDescription(inputQueue);
-            await client.CreateQueueAsync(queueDescription);
-            return client;
+            await client.DeleteQueueAsync(inputQueue);
         }
+
+        var queueOptions = new CreateQueueOptions(inputQueue);
+        await client.CreateQueueAsync(queueOptions);
+        return client;
     }
 }

@@ -2,16 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
   </PropertyGroup>
-
-  <ItemGroup>
-    <!-- bug in 4.0.0, throws System.OperationCanceledException: The operation was canceled. 
-         Issue: https://github.com/Azure/azure-sdk-for-net/issues/6410
-    <PackageReference Include="Microsoft.Azure.ServiceBus" Version="4.0.0" />
-    -->
-    <PackageReference Include="Microsoft.Azure.ServiceBus" Version="3.4.0" />
-  </ItemGroup>
 
 </Project>

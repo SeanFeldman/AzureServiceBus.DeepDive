@@ -1,66 +1,63 @@
-﻿namespace MessageDeduplication
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace MessageDeduplication;
+
+internal class Program
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Stage(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static async Task Main(string[] args)
+        var sender = serviceBusClient.CreateSender(destination);
+        try
         {
-            await Prepare.Stage(connectionString, destination);
+            var content = "Deep Dive de-duplication";
+            var messageId = new Guid(content.Take(16).Select(x => (byte)x).ToArray()).ToString();
 
-            var client = new QueueClient(connectionString, destination);
-            try
+            var messages = new List<ServiceBusMessage>
             {
-                var content = "Deep Dive de-duplication".AsByteArray();
-                var messageId = new Guid(content.Take(16).ToArray()).ToString();
+                new(content) { MessageId = messageId },
+                new(content) { MessageId = messageId },
+                new(content) { MessageId = messageId }
+            };
 
-                var messages = new List<Message>
-                {
-                    new Message(content) { MessageId = messageId },
-                    new Message(content) { MessageId = messageId },
-                    new Message(content) { MessageId = messageId }
-                };
+            await sender.SendMessagesAsync(messages);
 
-                await client.SendAsync(messages);
+            Console.WriteLine("Messages sent");
 
-                Console.WriteLine("Messages sent");
+            var processor = serviceBusClient.CreateProcessor(destination);
 
-                client.RegisterMessageHandler(
-                    (message, token) =>
-                    {
-                        Console.WriteLine($"Received message with '{message.MessageId}' and content '{Encoding.UTF8.GetString(message.Body)}'");
-
-                        return Task.CompletedTask;
-                    },
-                    new MessageHandlerOptions(
-                        exception =>
-                        {
-                            Console.WriteLine($"Exception: {exception.Exception}");
-                            return Task.CompletedTask;
-                        })
-                    {
-                        AutoComplete = true,
-                        MaxAutoRenewDuration = TimeSpan.FromSeconds(30)
-                    }
-                );
-
-                await Task.Delay(TimeSpan.FromSeconds(5));
-
-                await client.SendAsync(messages);
-            }
-            finally
+            processor.ProcessMessageAsync += args =>
             {
-                await client.CloseAsync();
-            }
+                Console.WriteLine($"Received message with '{args.Message.MessageId}' and content '{Encoding.UTF8.GetString(args.Message.Body)}'");
+
+                return Task.CompletedTask;
+            };
+
+            processor.ProcessErrorAsync += args =>
+            {
+                Console.WriteLine($"Exception: {args.Exception}");
+                return Task.CompletedTask;
+            };
+
+            await processor.StartProcessingAsync();
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            await sender.CloseAsync();
         }
     }
 }

@@ -1,39 +1,28 @@
-﻿namespace Sending
+﻿using System;
+using Azure.Messaging.ServiceBus;
+using Sending;
+
+var connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+var destination = "queue";
+
+await Prepare.Infrastructure(connectionString, destination);
+
+var serviceBusClient = new ServiceBusClient(connectionString);
+
+var client = serviceBusClient.CreateSender(destination);
+try
 {
-    using System;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-
-    internal class Program
+    var message = new ServiceBusMessage("Payload")
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        Subject = "Deep Dive" // Label
+    };
+    message.ApplicationProperties.Add("Machine", Environment.MachineName);
 
-        private static readonly string destination = "queue";
+    await client.SendMessageAsync(message);
 
-        private static async Task Main(string[] args)
-        {
-            await Prepare.Infrastructure(connectionString, destination);
-
-            var client = new QueueClient(connectionString, destination);
-            try
-            {
-                var message = new Message
-                {
-                    Body = Encoding.UTF8.GetBytes("Payload"),
-                    Label = "Deep Dive"
-                };
-
-                message.UserProperties.Add("Machine", Environment.MachineName);
-
-                await client.SendAsync(message);
-
-                Console.WriteLine("Message sent");
-            }
-            finally
-            {
-                await client.CloseAsync();
-            }
-        }
-    }
+    Console.WriteLine("Message sent");
+}
+finally
+{
+    await client.CloseAsync();
 }

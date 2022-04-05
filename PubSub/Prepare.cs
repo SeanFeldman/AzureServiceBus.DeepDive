@@ -1,71 +1,65 @@
-namespace PubSub
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus.Administration;
+
+namespace PubSub;
+
+public static class Prepare
 {
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-    using Microsoft.Azure.ServiceBus.Management;
-
-    public static class Prepare
+    public static async Task Infrastructure(string connectionString, string topicName, string rushSubscription, string currencySubscription)
     {
-        public static async Task Infrastructure(string connectionString, string topicName, string rushSubscription,
-            string currencySubscription)
+        var client = await Cleanup(connectionString, topicName, rushSubscription, currencySubscription);
+
+        var subscriptionOptions = new CreateSubscriptionOptions(topicName, rushSubscription);
+        await client.CreateSubscriptionAsync(subscriptionOptions);
+
+        subscriptionOptions = new CreateSubscriptionOptions(topicName, currencySubscription);
+        await client.CreateSubscriptionAsync(subscriptionOptions);
+
+        await client.DeleteRuleAsync(topicName, rushSubscription,  "$Default");
+        await client.DeleteRuleAsync(topicName, currencySubscription, "$Default");
+
+        var ruleOptions = new CreateRuleOptions
         {
-            var client = await Cleanup(connectionString, topicName, rushSubscription, currencySubscription);
-
-            var subscriptionDescription = new SubscriptionDescription(topicName, rushSubscription);
-            await client.CreateSubscriptionAsync(subscriptionDescription);
-            
-            subscriptionDescription = new SubscriptionDescription(topicName, currencySubscription);
-            await client.CreateSubscriptionAsync(subscriptionDescription);
-
-            await client.DeleteRuleAsync(topicName, rushSubscription, RuleDescription.DefaultRuleName);
-            await client.DeleteRuleAsync(topicName, currencySubscription, RuleDescription.DefaultRuleName);
-
-            var ruleDescription = new RuleDescription
+            Name = "MessagesWithRushlabel",
+            Filter = new CorrelationRuleFilter
             {
-                Name = "MessagesWithRushlabel",
-                Filter = new CorrelationFilter
-                {
-                    Label = "rush"
-                },
-                Action = null
-            };
-            await client.CreateRuleAsync(topicName, rushSubscription, ruleDescription);
+                Subject = "rush"
+            },
+            Action = null
+        };
+        await client.CreateRuleAsync(topicName, rushSubscription, ruleOptions);
 
-            ruleDescription = new RuleDescription
-            {
-                Name = "MessagesWithCurrencyCHF",
-                Filter = new SqlFilter("currency = 'CHF'"),
-                Action = new SqlRuleAction("SET currency = 'Złoty'")
-            };
-            await client.CreateRuleAsync(topicName, currencySubscription, ruleDescription);
+        ruleOptions = new CreateRuleOptions
+        {
+            Name = "MessagesWithCurrencyGBP",
+            Filter = new SqlRuleFilter("currency = 'GBP' OR currency = '£'"),
+            Action = new SqlRuleAction("SET status = 'Keep calm and carry on'")
+        };
+        await client.CreateRuleAsync(topicName, currencySubscription, ruleOptions);
+    }
 
-            await client.CloseAsync();
+    private static async Task<ServiceBusAdministrationClient> Cleanup(string connectionString, string topicName, string rushSubscription, string currencySubscription)
+    {
+        var client = new ServiceBusAdministrationClient(connectionString);
+
+        if (await client.SubscriptionExistsAsync(topicName, rushSubscription))
+        {
+            await client.DeleteSubscriptionAsync(topicName, rushSubscription);
         }
 
-        private static async Task<ManagementClient> Cleanup(string connectionString, string topicName,
-            string rushSubscription, string currencySubscription)
+        if (await client.SubscriptionExistsAsync(topicName, currencySubscription))
         {
-            var client = new ManagementClient(connectionString);
-
-            if (await client.SubscriptionExistsAsync(topicName, rushSubscription))
-            {
-                await client.DeleteSubscriptionAsync(topicName, rushSubscription);
-            }
-
-            if (await client.SubscriptionExistsAsync(topicName, currencySubscription))
-            {
-                await client.DeleteSubscriptionAsync(topicName, currencySubscription);
-            }
-
-            if (await client.TopicExistsAsync(topicName))
-            {
-                await client.DeleteTopicAsync(topicName);
-            }
-
-            var topicDescription = new TopicDescription(topicName);
-            await client.CreateTopicAsync(topicDescription);
-
-            return client;
+            await client.DeleteSubscriptionAsync(topicName, currencySubscription);
         }
+
+        if (await client.TopicExistsAsync(topicName))
+        {
+            await client.DeleteTopicAsync(topicName);
+        }
+
+        var topicDescription = new CreateTopicOptions(topicName);
+        await client.CreateTopicAsync(topicDescription);
+
+        return client;
     }
 }

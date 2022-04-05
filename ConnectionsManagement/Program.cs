@@ -1,44 +1,48 @@
-﻿namespace ConnectionsManagement
+﻿using System;
+using System.Threading.Tasks;
+using AtomicSends;
+using Azure.Messaging.ServiceBus;
+
+namespace ConnectionsManagement;
+
+internal class Program
 {
-    using System;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-    using Microsoft.Azure.ServiceBus.Core;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        Console.WriteLine("Using shared ServiceBusClient");
 
-        private static async Task Main(string[] args)
         {
-            await Prepare.Infrastructure(connectionString, destination);
+            var serviceBusClient = new ServiceBusClient(connectionString);
 
-            Console.WriteLine("Using connection string");
+            var sender = serviceBusClient.CreateSender(destination);
+            await sender.SendMessageAsync(new ServiceBusMessage("Deep Dive"));
+            var receiver = serviceBusClient.CreateReceiver(destination);
+            await receiver.ReceiveMessageAsync();
 
-            var sender = new MessageSender(connectionString, destination);
-            await sender.SendAsync(new Message("Deep Dive".AsByteArray()));
-            var receiver = new MessageReceiver(connectionString, destination);
-            await receiver.ReceiveAsync();
-
-            Console.WriteLine("Using connection sharing");
+            Console.WriteLine("Press Enter to use different ServiceBusClients");
             Console.ReadLine();
 
             await sender.CloseAsync();
             await receiver.CloseAsync();
-            sender = null;
-            receiver = null;
+            await serviceBusClient.DisposeAsync();
 
             GC.Collect();
+        }
 
-            var connection = new ServiceBusConnection(connectionString);
-            sender = new MessageSender(connection, destination);
-            receiver = new MessageReceiver(connection, destination);
+        {
+            var serviceBusClient1 = new ServiceBusClient(connectionString);
+            var serviceBusClient2 = new ServiceBusClient(connectionString);
 
-            await sender.SendAsync(new Message("Deep Dive".AsByteArray()));
-            await receiver.ReceiveAsync();
+            var sender = serviceBusClient1.CreateSender(destination);
+            await sender.SendMessageAsync(new ServiceBusMessage("Deep Dive"));
+            var receiver = serviceBusClient2.CreateReceiver(destination);
+            await receiver.ReceiveMessageAsync();
 
             Console.WriteLine("Enter to stop");
             Console.ReadLine();

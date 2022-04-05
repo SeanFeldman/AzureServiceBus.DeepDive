@@ -1,46 +1,38 @@
-﻿namespace MessageScheduling
+﻿using System;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace MessageScheduling;
+
+internal class Program
 {
-    using System;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-    using Microsoft.Azure.ServiceBus.Core;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static readonly TaskCompletionSource<bool> syncEvent = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        
-        private static async Task Main(string[] args)
-        {
-            await Prepare.Infrastructure(connectionString, destination);
+        var sender = serviceBusClient.CreateSender(destination);
+        var due = DateTimeOffset.UtcNow.AddSeconds(10);
 
-            var sender = new MessageSender(connectionString, destination);
-            var due = DateTimeOffset.UtcNow.AddSeconds(10);
+        await sender.ScheduleMessageAsync(new ServiceBusMessage($"Deep Dive 1 + {due}"), due);
+        Console.WriteLine($"{DateTimeOffset.UtcNow}: Message scheduled first");
 
-            await sender.ScheduleMessageAsync(new Message($"Deep Dive + {due}".AsByteArray()), due);
-            Console.WriteLine($"{DateTimeOffset.UtcNow}: Message scheduled first");
+        var sequenceId = await sender.ScheduleMessageAsync(new ServiceBusMessage($"Deep Dive 2 + {due}"), due);
+        Console.WriteLine($"{DateTimeOffset.UtcNow}: Message scheduled second");
 
-            var sequenceId = await sender.ScheduleMessageAsync(new Message($"Deep Dive + {due}".AsByteArray()), due);
-            Console.WriteLine($"{DateTimeOffset.UtcNow}: Message scheduled second");
+        await sender.CancelScheduledMessageAsync(sequenceId);
+        Console.WriteLine($"{DateTimeOffset.UtcNow}: Canceled second");
 
-            await sender.CancelScheduledMessageAsync(sequenceId);
-            Console.WriteLine($"{DateTimeOffset.UtcNow}: Canceled second");
+        var receiver = serviceBusClient.CreateReceiver(destination);
+        var message = await receiver.ReceiveMessageAsync();
+        Console.WriteLine($"{DateTimeOffset.UtcNow}: Received message with body: '{message.Body}'");
 
-            var receiver = new MessageReceiver(connectionString, destination);
-            receiver.RegisterMessageHandler((message, token) =>
-            {
-                Console.WriteLine($"{DateTimeOffset.UtcNow}: Received message with '{message.MessageId}' and content '{message.Body.AsString()}'");
-                syncEvent.TrySetResult(true);
-                return Task.CompletedTask;
-            }, ex => Task.CompletedTask);
-
-
-            await syncEvent.Task;
-            await sender.CloseAsync();
-            await receiver.CloseAsync();
-        }
+        await sender.CloseAsync();
+        await receiver.CloseAsync();
     }
 }

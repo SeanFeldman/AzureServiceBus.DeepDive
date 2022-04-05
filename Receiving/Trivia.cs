@@ -1,31 +1,31 @@
-namespace Receiving
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace Receiving;
+
+public static class Trivia
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-    using Microsoft.Azure.ServiceBus.Core;
-
-    public static class Trivia
+    public static async Task Ask(ServiceBusClient client, string source)
     {
-        public static async Task Hu(MessageReceiver receiver)
-        {
-            Message message;
+        ServiceBusReceivedMessage message;
 
-            message = await receiver.ReceiveAsync();
-            // or
-            var operationTimeout = TimeSpan.FromSeconds(4);
-            message = await receiver.ReceiveAsync(operationTimeout);
+        var receiver = client.CreateReceiver(source);
 
-            IList<Message> messages;
+        message = await receiver.ReceiveMessageAsync();
+        // or
+        var operationTimeout = TimeSpan.FromSeconds(4);
+        message = await receiver.ReceiveMessageAsync(operationTimeout);
 
-            var messageCount = 5;
-            messages = await receiver.ReceiveAsync(messageCount);
-            // or
-            messages = await receiver.ReceiveAsync(messageCount, operationTimeout);
-        }
+        IReadOnlyList<ServiceBusReceivedMessage> messages;
 
-        // If there are 5 messages in the queue and 10 are requested, what will be the outcome?
-        // If there are 20 messages in the queue and 10 are requested, what will be the outcome?
+        var messageCount = 5;
+        messages = await receiver.ReceiveMessagesAsync(messageCount);
+        // or
+        messages = await receiver.ReceiveMessagesAsync(messageCount, operationTimeout);
     }
+
+    // If there are 5 messages in the queue and 10 are requested, what will be the outcome?
+    // If there are 20 messages in the queue and 10 are requested, what will be the outcome?
 }

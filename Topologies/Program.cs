@@ -1,58 +1,56 @@
 ﻿using System;
-using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Azure.ServiceBus;
-using Microsoft.Azure.ServiceBus.Core;
+using Azure.Messaging.ServiceBus;
 
-namespace Topologies
+namespace Topologies;
+internal class Program
 {
-    internal class Program
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+
+    private static readonly string topicName = "topic";
+    private static readonly string rushSubscription = "ServiceASubscription";
+    private static readonly string currencySubscription = "ServiceBSubscription";
+
+    private static readonly string inputQueue = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, inputQueue, topicName, rushSubscription, currencySubscription);
 
-        private static readonly string topicName = "topic";
-        private static readonly string rushSubscription = "ServiceASubscription";
-        private static readonly string currencySubscription = "ServiceBSubscription";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static readonly string inputQueue = "queue";
+        var sender = serviceBusClient.CreateSender(topicName);
 
-        private static async Task Main(string[] args)
+        var message = new ServiceBusMessage("Message from service A");
+        message.Subject = "rush";
+        await sender.SendMessageAsync(message);
+
+        message = new ServiceBusMessage("Message from service B");
+        message.ApplicationProperties.Add("priority", "high");
+        await sender.SendMessageAsync(message);
+
+        await sender.CloseAsync();
+
+        var receiver = serviceBusClient.CreateReceiver(inputQueue);
+        try
         {
-            await Prepare.Infrastructure(connectionString, inputQueue, topicName, rushSubscription, currencySubscription);
-
-            var client = new MessageSender(connectionString, topicName);
-
-            var message = new Message("Message from service A".AsByteArray());
-            message.Label = "rush";
-            await client.SendAsync(message);
-
-            message = new Message("Message from service B".AsByteArray());
-            message.UserProperties.Add("priority", "high");
-            await client.SendAsync(message);
-
-            await client.CloseAsync();
-
-            var receiver = new MessageReceiver(connectionString, inputQueue);
-            try
+            var receivedMessages = await receiver.ReceiveMessagesAsync(2);
+            foreach (var receivedMessage in receivedMessages)
             {
-                var receivedMessages = await receiver.ReceiveAsync(2);
-                foreach (var receivedMessage in receivedMessages)
-                {
-                    var body = receivedMessage.Body.AsString();
-                    var label = receivedMessage.Label;
-                    var priority = receivedMessage.Label ?? receivedMessage.UserProperties["priority"];
-                    
-                    Console.WriteLine($"Body = '{body}' / Label = '{label}' / Priority = '{priority}'");
-                }
+                var body = receivedMessage.Body.ToString();
+                var label = receivedMessage.Subject;
+                var priority = receivedMessage.Subject ?? receivedMessage.ApplicationProperties["priority"];
+
+                Console.WriteLine($"Body = '{body}' / Label = '{label}' / Priority = '{priority}'");
             }
-            catch (InvalidOperationException ex)
-            {
-                Console.Error.WriteLine(ex.Message);
-            }
-            finally
-            {
-                await receiver.CloseAsync();
-            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+        }
+        finally
+        {
+            await receiver.CloseAsync();
         }
     }
 }

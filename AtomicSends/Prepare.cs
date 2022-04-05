@@ -1,30 +1,27 @@
-namespace AtomicSends
+using Azure.Messaging.ServiceBus.Administration;
+
+namespace AtomicSends;
+
+using System;
+using System.Threading.Tasks;
+
+public static class Prepare
 {
-    using System;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus.Management;
-
-    public static class Prepare
+    public static async Task Infrastructure(string connectionString, string destination)
     {
-        public static async Task Infrastructure(string connectionString, string destination)
+        var client = new ServiceBusAdministrationClient(connectionString);
+        if (await client.QueueExistsAsync(destination))
         {
-            var client = new ManagementClient(connectionString);
-            if (await client.QueueExistsAsync(destination)) 
-            {
-                await client.DeleteQueueAsync(destination);
-            }
-            await client.CreateQueueAsync(destination);
-            await client.CloseAsync();
+            await client.DeleteQueueAsync(destination);
         }
+        await client.CreateQueueAsync(destination);
+    }
 
-        public static async Task ReportNumberOfMessages(string connectionString, string destination)
-        {
-            var client = new ManagementClient(connectionString);
+    public static async Task ReportNumberOfMessages(string connectionString, string destination)
+    {
+        var client = new ServiceBusAdministrationClient(connectionString);
 
-            var info = await client.GetQueueRuntimeInfoAsync(destination);
-            Console.WriteLine($"{info.MessageCount} messages in '{destination}'");
-
-            await client.CloseAsync();
-        }
+        QueueRuntimeProperties queueProperties = await client.GetQueueRuntimePropertiesAsync(destination);
+        Console.WriteLine($"{queueProperties.ActiveMessageCount} messages in '{destination}'");
     }
 }

@@ -1,56 +1,56 @@
 ﻿using System;
-using System.Text;
 using System.Threading.Tasks;
 using System.Transactions;
-using Microsoft.Azure.ServiceBus;
-using Microsoft.Azure.ServiceBus.Core;
+using Azure.Messaging.ServiceBus;
 
-namespace TransferDLQ
+namespace TransferDLQ;
+
+internal class Program
 {
-    internal class Program
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+
+    private static readonly string inputQueue = "queue";
+    private static readonly string destinationQueue = "destination";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, inputQueue, destinationQueue);
 
-        private static readonly string inputQueue = "queue";
-        private static readonly string destinationQueue = "destination";
+        var options = new ServiceBusClientOptions { EnableCrossEntityTransactions = true };
+        var client = new ServiceBusClient(connectionString, options);
 
-        private static async Task Main(string[] args)
+        var initiator = client.CreateSender(inputQueue);
+        await initiator.SendMessageAsync(new ServiceBusMessage("Deep Dive"));
+
+        var receiver = client.CreateReceiver(inputQueue);
+        var sender = client.CreateSender(destinationQueue);
+
+        var receivedMessage = await receiver.ReceiveMessageAsync();
+        Console.WriteLine($"Received message from '{inputQueue}");
+        await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
+
+        using (var ts = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
         {
-            await Prepare.Infrastructure(connectionString, inputQueue, destinationQueue);
+            await sender.SendMessageAsync(new ServiceBusMessage("Message for destination"));
 
-            var client = new QueueClient(connectionString, inputQueue);
-            await client.SendAsync(new Message("Deep Dive".AsByteArray()));
-            await client.CloseAsync();
-
-            var connection = new ServiceBusConnection(connectionString);
-            var receiver = new MessageReceiver(connection, inputQueue);
-            var sender = new MessageSender(connection, destinationQueue, inputQueue);
-
-            var incoming = await receiver.ReceiveAsync();
-            Console.WriteLine($"Received message from '{inputQueue}");
+            Console.WriteLine($"Sent message to '{destinationQueue}'");
             await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
 
-            using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
-            {
-                await sender.SendAsync(new Message("Message for destination".AsByteArray()));
+            await receiver.CompleteMessageAsync(receivedMessage);
 
-                Console.WriteLine($"Sent message to '{destinationQueue}'");
-                await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
-
-                await receiver.CompleteAsync(incoming.SystemProperties.LockToken);
-                Console.WriteLine("Completed incoming message");
-                await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
-
-                await Prepare.DisableDestination(connectionString, destinationQueue);
-                scope.Complete();
-            }
-
-            Console.WriteLine("Completed scope");
+            Console.WriteLine("Completed incoming message");
             await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
 
-            await receiver.CloseAsync();
-            await sender.CloseAsync();
-            await connection.CloseAsync();
+            Console.WriteLine($"Make '{destinationQueue}' queue unreachable");
+            await Prepare.DisableDestination(connectionString, destinationQueue);
+
+            Console.WriteLine("Complete scope");
+            ts.Complete();
         }
+
+        await Prepare.ReportNumberOfMessages(connectionString, inputQueue, destinationQueue);
+
+        await receiver.CloseAsync();
+        await sender.CloseAsync();
     }
 }

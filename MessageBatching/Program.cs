@@ -1,53 +1,52 @@
-﻿namespace MessageBatching
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace MessageBatching;
+
+internal class Program
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Transactions;
-    using Microsoft.Azure.ServiceBus;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Infrastructure(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static async Task Main(string[] args)
+        var sender = serviceBusClient.CreateSender(destination);
+
+        var messages = new List<ServiceBusMessage>();
+        for (var i = 0; i < 10; i++)
         {
-            await Prepare.Infrastructure(connectionString, destination);
+            var message = new ServiceBusMessage($"Deep Dive{i}");
+            messages.Add(message);
+        }
 
-            var client = new QueueClient(connectionString, destination);
+        Console.WriteLine($"Sending {messages.Count} messages in a batch.");
+        await sender.SendMessagesAsync(messages);
+        messages.Clear();
+        Console.WriteLine();
 
-            var messages = new List<Message>();
-            for (var i = 0; i < 10; i++)
-            {
-                var message = new Message();
-                message.Body = $"Deep Dive{i}".AsByteArray();
-                messages.Add(message);
-            }
+        for (var i = 0; i < 6500; i++)
+        {
+            var message = new ServiceBusMessage($"Deep Dive{i}");
+            messages.Add(message);
+        }
 
+        await sender.SendMessagesAsync(messages);
+
+        try
+        {
             Console.WriteLine($"Sending {messages.Count} messages in a batch.");
-            await client.SendAsync(messages);
-            messages.Clear();
-            Console.WriteLine();
-
-            for (var i = 0; i < 6500; i++)
-            {
-                var message = new Message();
-                message.Body = $"Deep Dive{i}".AsByteArray();
-                messages.Add(message);
-            }
-
-            try
-            {
-                Console.WriteLine($"Sending {messages.Count} messages in a batch.");
-                await client.SendAsync(messages);
-            }
-            catch (MessageSizeExceededException ex)
-            {
-                Console.Error.WriteLine($"{nameof(MessageSizeExceededException)}: {ex.Message}");
-            }
+            await sender.SendMessagesAsync(messages);
+        }
+        catch (ServiceBusException ex)
+        {
+            Console.Error.WriteLine($"{ex.Reason}: {ex.Message}");
         }
     }
 }

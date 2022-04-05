@@ -1,40 +1,37 @@
-﻿namespace MessageExpiry
+﻿using System;
+using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus;
+
+namespace MessageExpiry;
+internal class Program
 {
-    using System;
-    using System.Text;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
+    private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
 
-    internal class Program
+    private static readonly string destination = "queue";
+
+    private static async Task Main(string[] args)
     {
-        private static readonly string connectionString = Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString");
+        await Prepare.Stage(connectionString, destination);
 
-        private static readonly string destination = "queue";
+        var serviceBusClient = new ServiceBusClient(connectionString);
 
-        private static async Task Main(string[] args)
+        var sender = serviceBusClient.CreateSender(destination);
+
+        var message = new ServiceBusMessage("Deep Dive")
         {
-            await Prepare.Stage(connectionString, destination);
+            // if not set the default time to live on the queue counts
+            TimeToLive = TimeSpan.FromSeconds(3)
+        };
 
-            var client = new QueueClient(connectionString, destination);
+        await sender.SendMessageAsync(message);
+        Console.WriteLine("Message sent");
 
-            var message = new Message
-            {
-                Body = "Deep Dive".AsByteArray(),
-                // if not set the default time to live on the queue counts
-                TimeToLive = TimeSpan.FromSeconds(10)
-            };
-            
-            await client.SendAsync(message);
-            Console.WriteLine("Sent message");
+        // Note that expired messages are only purged and moved to the DLQ when there is at least one
+        // active receiver pulling from the main queue or subscription; that behavior is by design.
+        await Prepare.SimulateActiveReceiver(serviceBusClient, destination);
 
-            // Note that expired messages are only purged and moved to the DLQ when there is at least one
-            // active receiver pulling from the main queue or subscription; that behavior is by design.
-            //await Task.Delay(TimeSpan.FromSeconds(15));
-            await Prepare.SimulateActiveReceiver(client);
+        Console.WriteLine("Message must have expired by now");
 
-            Console.WriteLine("Message expired");
-
-            await client.CloseAsync();
-        }
+        await sender.CloseAsync();
     }
 }

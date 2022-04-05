@@ -1,40 +1,46 @@
-namespace MessageExpiry
+namespace MessageExpiry;
+
+using Azure.Messaging.ServiceBus;
+using Azure.Messaging.ServiceBus.Administration;
+using System;
+using System.Threading.Tasks;
+
+public static class Prepare
 {
-    using System;
-    using System.Threading.Tasks;
-    using Microsoft.Azure.ServiceBus;
-    using Microsoft.Azure.ServiceBus.Management;
-
-    public static class Prepare
+    public static async Task Stage(string connectionString, string destination)
     {
-        public static async Task Stage(string connectionString, string destination)
+        var client = new ServiceBusAdministrationClient(connectionString);
+        if (await client.QueueExistsAsync(destination)) await client.DeleteQueueAsync(destination);
+
+        var description = new CreateQueueOptions(destination)
         {
-            var client = new ManagementClient(connectionString);
-            if (await client.QueueExistsAsync(destination)) await client.DeleteQueueAsync(destination);
+            MaxDeliveryCount = int.MaxValue
+        };
+        await client.CreateQueueAsync(description);
+    }
 
-            var description = new QueueDescription(destination)
-            {
-                MaxDeliveryCount = int.MaxValue
-            };
-            await client.CreateQueueAsync(description);
-
-            await client.CloseAsync();
-        }
-
-        public static async Task SimulateActiveReceiver(QueueClient client)
+    public static async Task SimulateActiveReceiver(ServiceBusClient client, string entity)
+    {
+        var options = new ServiceBusProcessorOptions
         {
-            client.RegisterMessageHandler(
-                async (message, token) =>
-                {
-                    await client.AbandonAsync(message.SystemProperties.LockToken);
-                    await Task.Delay(2000, token);
-                },
-                new MessageHandlerOptions(exception => Task.CompletedTask)
-                {
-                    AutoComplete = false
-                });
+            AutoCompleteMessages = false,
+            MaxConcurrentCalls = 1
+        };
+        var processor = client.CreateProcessor(entity, options);
 
-            await Task.Delay(TimeSpan.FromSeconds(15));
-        }
+        processor.ProcessMessageAsync += async args =>
+        {
+            await args.AbandonMessageAsync(args.Message);
+            Console.WriteLine("(Emulating active receiver w/o receiving messages)");
+            await Task.Delay(TimeSpan.FromSeconds(5));
+        };
+
+        processor.ProcessErrorAsync += async args =>
+        {
+            await Task.CompletedTask;
+        };
+
+        await processor.StartProcessingAsync();
+        await Task.Delay(TimeSpan.FromSeconds(15));
     }
 }
